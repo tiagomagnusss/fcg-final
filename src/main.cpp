@@ -5,16 +5,9 @@
 //    INF01047 Fundamentos de Computação Gráfica
 //               Prof. Eduardo Gastal
 //
-//                   LABORATÓRIO 5
+//                   Trabalho Final
 //
 
-// Arquivos "headers" padrões de C podem ser incluídos em um
-// programa C++, sendo necessário somente adicionar o caractere
-// "c" antes de seu nome, e remover o sufixo ".h". Exemplo:
-//    #include <stdio.h> // Em C
-//  vira
-//    #include <cstdio> // Em C++
-//
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -70,7 +63,7 @@ struct ObjModel
 
         if (!ret)
             throw std::runtime_error("Erro ao carregar modelo.");
-        
+
         printf("OK.\n");
     }
 };
@@ -155,7 +148,7 @@ float g_AngleZ = 0.0f;
 
 // "g_LeftMouseButtonPressed = true" se o usuário está com o botão esquerdo do mouse
 // pressionado no momento atual. Veja função MouseButtonCallback().
-bool g_LeftMouseButtonPressed = false;
+bool g_LeftMouseButtonPressed = true; // fixando sempre em true, assim não é preciso clicar para mover a câmera
 bool g_RightMouseButtonPressed = false; // Análogo para botão direito do mouse
 bool g_MiddleMouseButtonPressed = false; // Análogo para botão do meio do mouse
 
@@ -180,6 +173,13 @@ bool g_UsePerspectiveProjection = true;
 
 // Variável que controla se o texto informativo será mostrado na tela.
 bool g_ShowInfoText = true;
+
+// Variáveis para saber se uma tecla foi pressionada (FONTE: Lab2)
+bool key_pressed = false;
+bool kb_w_pressed = false;
+bool kb_a_pressed = false;
+bool kb_s_pressed = false;
+bool kb_d_pressed = false;
 
 // Variáveis que definem um programa de GPU (shaders). Veja função LoadShadersFromFiles().
 GLuint vertex_shader_id;
@@ -221,10 +221,10 @@ int main(int argc, char* argv[])
     // funções modernas de OpenGL.
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    // Criamos uma janela do sistema operacional, com 800 colunas e 600 linhas
+    // Criamos uma janela do sistema operacional, com 1280 colunas e 720 linhas
     // de pixels, e com título "INF01047 ...".
     GLFWwindow* window;
-    window = glfwCreateWindow(800, 600, "INF01047 - Seu Cartao - Seu Nome", NULL, NULL);
+    window = glfwCreateWindow(1280, 720, "INF01047 - Trabalho Final - Tiago Magnus (00287710) e Cíntia (00xxx)", NULL, NULL);
     if (!window)
     {
         glfwTerminate();
@@ -240,7 +240,13 @@ int main(int argc, char* argv[])
     // ... ou movimentar o cursor do mouse em cima da janela ...
     glfwSetCursorPosCallback(window, CursorPosCallback);
     // ... ou rolar a "rodinha" do mouse.
-    glfwSetScrollCallback(window, ScrollCallback);
+    // glfwSetScrollCallback(window, ScrollCallback); removendo o funcionamento de scroll
+
+    // forçando o cursor a sumir e limitando na bounding box da janela
+    // usar constantes?
+    // ver: https://www.glfw.org/docs/3.1/group__input.html#ga04b03af936d906ca123c8f4ee08b39e7
+    glfwSetCursorPos(window, 1280/2, 720/2);
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // Indicamos que as chamadas OpenGL deverão renderizar nesta janela
     glfwMakeContextCurrent(window);
@@ -253,7 +259,7 @@ int main(int argc, char* argv[])
     // redimensionada, por consequência alterando o tamanho do "framebuffer"
     // (região de memória onde são armazenados os pixels da imagem).
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
-    FramebufferSizeCallback(window, 800, 600); // Forçamos a chamada do callback acima, para definir g_ScreenRatio.
+    FramebufferSizeCallback(window, 1280, 720); // Forçamos a chamada do callback acima, para definir g_ScreenRatio.
 
     // Imprimimos no terminal informações sobre a GPU do sistema
     const GLubyte *vendor      = glGetString(GL_VENDOR);
@@ -308,6 +314,11 @@ int main(int argc, char* argv[])
     glm::mat4 the_model;
     glm::mat4 the_view;
 
+    // Variáveis de câmera
+    glm::vec4 camera_position_c ;
+    glm::vec4 camera_view_vector;
+    glm::vec4 matriz_camera;
+
     // Ficamos em loop, renderizando, até que o usuário feche a janela
     while (!glfwWindowShouldClose(window))
     {
@@ -338,12 +349,57 @@ int main(int argc, char* argv[])
         float z = r*cos(g_CameraPhi)*cos(g_CameraTheta);
         float x = r*cos(g_CameraPhi)*sin(g_CameraTheta);
 
+/*
         // Abaixo definimos as varáveis que efetivamente definem a câmera virtual.
         // Veja slides 195-227 e 229-234 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
         glm::vec4 camera_position_c  = glm::vec4(x,y,z,1.0f); // Ponto "c", centro da câmera
         glm::vec4 camera_lookat_l    = glm::vec4(0.0f,0.0f,0.0f,1.0f); // Ponto "l", para onde a câmera (look-at) estará sempre olhando
         glm::vec4 camera_view_vector = camera_lookat_l - camera_position_c; // Vetor "view", sentido para onde a câmera está virada
         glm::vec4 camera_up_vector   = glm::vec4(0.0f,1.0f,0.0f,0.0f); // Vetor "up" fixado para apontar para o "céu" (eito Y global)
+*/
+        // Cria o objeto da câmera
+        glm::vec4 free_camera = glm::vec4(-x,-y,-z,0.0f);
+        if( !key_pressed )
+        {
+            camera_position_c  = glm::vec4(x,y,z,1.0f); //
+        }
+
+        // frente é definido como uma soma â câmera
+        if (kb_w_pressed)
+        {
+            camera_position_c.x += 0.001 * free_camera.x;
+            camera_position_c.y += 0.001 * free_camera.y;
+            camera_position_c.z += 0.001 * free_camera.z;
+            key_pressed = true;
+        }
+        // trás é definido como uma subtração â câmera
+        if (kb_s_pressed)
+        {
+            camera_position_c.x -= 0.001 * free_camera.x;
+            camera_position_c.y -= 0.001 * free_camera.y;
+            camera_position_c.z -= 0.001 * free_camera.z;
+            key_pressed = true;
+        }
+        // esquerda é definido como uma rotação e soma â câmera
+        if (kb_a_pressed)
+        {
+            matriz_camera = Matrix_Rotate_Y(1.5708) * free_camera;
+            camera_position_c.x += 0.001 * matriz_camera.x;
+            camera_position_c.z += 0.001 * matriz_camera.z;
+            key_pressed = true;
+        }
+        // direita é definido como uma rotação e soma â câmera
+        if (kb_d_pressed)
+        {
+            matriz_camera = Matrix_Rotate_Y(1.5708) * free_camera;
+            camera_position_c.x -= 0.001 * matriz_camera.x;
+            camera_position_c.z -= 0.001 * matriz_camera.z;
+            key_pressed = true;
+        }
+
+        glm::vec4 camera_up_vector = glm::vec4(0.0f,1.0f,0.0f,0.0f);
+        camera_view_vector = free_camera;
+
 
         // Computamos a matriz "View" utilizando os parâmetros da câmera para
         // definir o sistema de coordenadas da câmera.  Veja slides 2-14, 184-190 e 236-242 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
@@ -956,7 +1012,7 @@ GLuint CreateGpuProgram(GLuint vertex_shader_id, GLuint fragment_shader_id)
         fprintf(stderr, "%s", output.c_str());
     }
 
-    // Os "Shader Objects" podem ser marcados para deleção após serem linkados 
+    // Os "Shader Objects" podem ser marcados para deleção após serem linkados
     glDeleteShader(vertex_shader_id);
     glDeleteShader(fragment_shader_id);
 
@@ -1007,7 +1063,7 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
     {
         // Quando o usuário soltar o botão esquerdo do mouse, atualizamos a
         // variável abaixo para false.
-        g_LeftMouseButtonPressed = false;
+        // g_LeftMouseButtonPressed = false; fixando em true
     }
     if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
     {
@@ -1058,21 +1114,21 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-    
+
         // Atualizamos parâmetros da câmera com os deslocamentos
-        g_CameraTheta -= 0.01f*dx;
-        g_CameraPhi   += 0.01f*dy;
-    
+        g_CameraTheta -= 0.005f*dx;
+        g_CameraPhi   += 0.005f*dy;
+
         // Em coordenadas esféricas, o ângulo phi deve ficar entre -pi/2 e +pi/2.
         float phimax = 3.141592f/2;
         float phimin = -phimax;
-    
+
         if (g_CameraPhi > phimax)
             g_CameraPhi = phimax;
-    
+
         if (g_CameraPhi < phimin)
             g_CameraPhi = phimin;
-    
+
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1084,11 +1140,11 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-    
+
         // Atualizamos parâmetros da antebraço com os deslocamentos
         g_ForearmAngleZ -= 0.01f*dx;
         g_ForearmAngleX += 0.01f*dy;
-    
+
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1100,11 +1156,11 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         // Deslocamento do cursor do mouse em x e y de coordenadas de tela!
         float dx = xpos - g_LastCursorPosX;
         float dy = ypos - g_LastCursorPosY;
-    
+
         // Atualizamos parâmetros da antebraço com os deslocamentos
         g_TorsoPositionX += 0.01f*dx;
         g_TorsoPositionY -= 0.01f*dy;
-    
+
         // Atualizamos as variáveis globais para armazenar a posição atual do
         // cursor como sendo a última posição conhecida do cursor.
         g_LastCursorPosX = xpos;
@@ -1205,6 +1261,53 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         LoadShadersFromFiles();
         fprintf(stdout,"Shaders recarregados!\n");
         fflush(stdout);
+    }
+
+    // controles de movimento
+    if (action == GLFW_PRESS)
+    {
+        if (key == GLFW_KEY_W)
+        {
+            kb_w_pressed = true;
+        }
+
+        if (key == GLFW_KEY_A)
+        {
+            kb_a_pressed = true;
+        }
+
+        if (key == GLFW_KEY_S)
+        {
+            kb_s_pressed = true;
+        }
+
+        if (key == GLFW_KEY_D)
+        {
+            kb_d_pressed =true;
+        }
+    }
+
+    if (action == GLFW_RELEASE)
+    {
+        if (key == GLFW_KEY_W)
+        {
+            kb_w_pressed = false;
+        }
+
+        if (key == GLFW_KEY_S)
+        {
+            kb_s_pressed = false;
+        }
+
+        if (key == GLFW_KEY_A)
+        {
+            kb_a_pressed = false;
+        }
+
+        if (key == GLFW_KEY_D)
+        {
+            kb_d_pressed = false;
+        }
     }
 }
 
@@ -1331,7 +1434,7 @@ void TextRendering_ShowFramesPerSecond(GLFWwindow* window)
     if ( ellapsed_seconds > 1.0f )
     {
         numchars = snprintf(buffer, 20, "%.2f fps", ellapsed_frames / ellapsed_seconds);
-    
+
         old_seconds = seconds;
         ellapsed_frames = 0;
     }
