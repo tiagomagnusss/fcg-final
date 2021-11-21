@@ -637,11 +637,11 @@ int main(int argc, char* argv[])
             DrawVirtualObject("defender");
 
             // ## BACK
-            glm::vec4 p20 = glm::vec4(-24.0f,0.0f,-30.0f,1.0f);
-            glm::vec4 p21 = glm::vec4(-5.0f,0.0f,-30.0f,1.0f);
-            glm::vec4 p22 = glm::vec4(5.0f,0.0f,-30.0f,1.0f);
-            glm::vec4 p23 = glm::vec4(24.0f,0.0f,-30.0f,1.0f);
-            glm::vec4 tr_position2 = bezier_pos(p20, p21, p22, p23, t);
+            glm::vec4 p20 = glm::vec4(-8.0f,0.0f,-30.0f,1.0f);
+            glm::vec4 p21 = glm::vec4(-0.0f,0.0f,-30.0f,1.0f);
+            glm::vec4 p22 = glm::vec4(0.0f,0.0f,-30.0f,1.0f);
+            glm::vec4 p23 = glm::vec4(8.0f,0.0f,-30.0f,1.0f);
+            glm::vec4 tr_position2 = bezier_pos(p20, p21, p22, p23, t_fast);
             model = Matrix_Translate(tr_position2.x,tr_position2.y,tr_position2.z)
                     * Matrix_Scale(growth_multiplier, growth_multiplier, growth_multiplier)
                     * Matrix_Rotate_X(-1.55f);
@@ -728,7 +728,7 @@ int main(int argc, char* argv[])
                 collided = true;
                 char buffer[80];
                 snprintf(buffer, 80, "Colliding with %s\n", obj.first.c_str());
-                TextRendering_PrintString(window, buffer, -1.0f+pad, -1.0f+2*pad, 1.0f);
+                TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+2*pad, 1.0f);
 
                 collidedObjects.push_back(obj.first);
             }
@@ -819,7 +819,7 @@ int main(int argc, char* argv[])
                     float pad = TextRendering_LineHeight(window);
                     char buffer[80];
                     snprintf(buffer, 80, "Victory!!!\n");
-                    TextRendering_PrintString(window, buffer, -1.0f+pad, -1.0f+pad, 1.0f);
+                    TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+pad*3, 1.0f);
                 }
             }
         }
