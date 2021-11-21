@@ -19,13 +19,16 @@ uniform mat4 view;
 uniform mat4 projection;
 
 // Identificador que define qual objeto está sendo desenhado no momento
-#define SPHERE 0
-#define BUNNY  1
-#define DEFENDER  2
-#define WALL_TOP    3
-#define WALL_BOTTOM 4
-#define WALL_LEFT   5
-#define WALL_RIGHT  6
+#define SPHERE         0
+#define BUNNY          1
+#define DEFENDER       2
+#define WALL_TOP       3
+#define WALL_BOTTOM    4
+#define WALL_LEFT      5
+#define WALL_RIGHT     6
+#define WALL_FRONT     7
+#define WALL_BACK      8
+#define WALL_TOUCHDOWN 9
 uniform int object_id;
 
 // Parâmetros da axis-aligned bounding box (AABB) do modelo
@@ -36,6 +39,9 @@ uniform vec4 bbox_max;
 uniform sampler2D TextureImage0;
 uniform sampler2D TextureImage1;
 uniform sampler2D TextureImage2;
+uniform sampler2D TextureImage3;
+uniform sampler2D TextureImage4;
+uniform sampler2D TextureImage5;
 
 // O valor de saída ("out") de um Fragment Shader é a cor final do fragmento.
 out vec3 color;
@@ -132,55 +138,51 @@ void main()
     }
     else if ( object_id >= 3 )
     {
-        float minx = bbox_min.x;
-        float maxx = bbox_max.x;
-
-        float miny = bbox_min.y;
-        float maxy = bbox_max.y;
-
-        float minz = bbox_min.z;
-        float maxz = bbox_max.z;
-
-        U = (position_model.x - minx)/(maxx-minx);
-        V = (position_model.y - miny)/(maxy-miny);
-        //U = texcoords.x;
-        //V = texcoords.y;
+        U = texcoords.x;
+        V = texcoords.y;
     }
 
     // Obtemos a refletância difusa a partir da leitura da imagem TextureImage0
     vec3 Kd0 = texture(TextureImage0, vec2(U,V)).rgb;
     vec3 Kd1 = texture(TextureImage1, vec2(U,V)).rgb;
+    vec3 Kd2 = texture(TextureImage2, vec2(U,V)).rgb;
+    vec3 Kd3 = texture(TextureImage3, vec2(U,V)).rgb;
+    vec3 Kd4 = texture(TextureImage4, vec2(U,V)).rgb;
+    vec3 Kd5 = texture(TextureImage5, vec2(U,V)).rgb;
 
     // Equação de Iluminação
     float lambert = max(0,dot(n,l));
 
+    // defensores
     if ( object_id == 2 )
     {
-        color = vec3(0.30, 0.01, 0.12) * (1 - pow(lambert, 0.1)) + vec3(0.30, 0.01, 0.12) * (lambert + 0.01);
+        color = vec3(0.70, 0.01, 0.02) * (1 - pow(lambert, 0.2)) + vec3(0.70, 0.01, 0.02) * (lambert + 0.01);
     }
+    // ceu
     else if ( object_id == 3 )
     {
-        color = vec3(0.28, 0.31, 0.22);
+        color = Kd4 * (1 - pow(lambert, 0.2)) + Kd4 * (lambert + 0.01);
+        //color = vec3(0.28, 0.31, 0.22);
     }
+    // campo
     else if ( object_id == 4 )
     {
-        color = vec3(0.58, 0.31, 0.37);
+        color = Kd2 * (1 - pow(lambert, 0.2)) + Kd2 * (lambert + 0.01);
     }
-    else if ( object_id == 5 )
+    // goal posts
+    else if ( object_id == 5 || object_id == 6 )
     {
-        color = vec3(0.24, 0.78, 0.55);
+        color = Kd3 * (1 - pow(lambert, 0.2)) + Kd3 * (lambert + 0.01);
     }
-    else if ( object_id == 6 )
+    // crowds
+    else if ( object_id == 7 || object_id == 8)
     {
-        color = vec3(0.33, 0.48, 0.67);
+        color = Kd5 * (1 - pow(lambert, 0.2)) + Kd5 * (lambert + 0.01);
     }
-    else if ( object_id == 7 )
+    // victory wall
+    else if ( object_id == 9 )
     {
-        color = vec3(0.88, 0.34, 0.12);
-    }
-    else if ( object_id == 8 )
-    {
-        color = vec3(0.51, 0.78, 0.37);
+        color = vec3(0.831, 0.686, 0.215);
     }
     else
     {
