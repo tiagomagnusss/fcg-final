@@ -12,10 +12,19 @@
 #include <glm/gtc/type_ptr.hpp>
 
 // objetos para cálculo de colisão
-struct AmbientObject
+struct PlaneObject
 {
     std::string name;
     glm::vec3 bbox;
 };
 
-bool isCollidingWithPlane(AmbientObject obj, AmbientObject plane);
+struct AmbientObject
+{
+    std::string name;
+    glm::vec3 bbox_min;
+    glm::vec3 bbox_max;
+};
+
+bool isCollidingWithPlane(AmbientObject obj, PlaneObject plane);
+bool objectsColliding(AmbientObject obj1, AmbientObject obj2);
+

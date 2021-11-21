@@ -115,6 +115,9 @@ void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
 void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
+// funcao de bezier
+glm::vec4 bezier_pos(glm::vec4 p0, glm::vec4 p1, glm::vec4 p2, glm::vec4 p3, float t);
+
 // Definimos uma estrutura que armazenará dados necessários para renderizar
 // cada objeto da cena virtual.
 struct SceneObject
@@ -128,6 +131,7 @@ struct SceneObject
     glm::vec3    bbox_max;
 };
 
+// PlaneObjects em collisions
 // AmbientObjects em collisions
 
 
@@ -142,8 +146,18 @@ std::map<std::string, SceneObject> g_VirtualScene;
 // Pilha que guardará as matrizes de modelagem.
 std::stack<glm::mat4>  g_MatrixStack;
 
-// Lista de objetos que existirão na cena
+// Lista de planos que existirão na cena
+std::map<std::string, PlaneObject> planeMap;
+
+// Lista de objetos que existirão na cena (incl. player)
 std::map<std::string, AmbientObject> objectMap;
+
+// parâmetros de bezier
+float t = 0.0f;
+float t_fast = 0.0f;
+// usada pra fazer o caminho inverso da curva quando passar do limite
+bool increasing = true;
+bool increasing_fast = true;
 
 // Razão de proporção da janela (largura/altura). Veja função FramebufferSizeCallback().
 float g_ScreenRatio = 1.0f;
@@ -152,6 +166,10 @@ float g_ScreenRatio = 1.0f;
 float g_AngleX = 0.0f;
 float g_AngleY = 0.0f;
 float g_AngleZ = 0.0f;
+
+float g_AngleX2 = 0.0f;
+float g_AngleY2 = 0.0f;
+float g_AngleZ2 = 0.0f;
 
 // "g_LeftMouseButtonPressed = true" se o usuário está com o botão esquerdo do mouse
 // pressionado no momento atual. Veja função MouseButtonCallback().
@@ -285,6 +303,10 @@ int main(int argc, char* argv[])
     // Carregamos duas imagens para serem utilizadas como textura
     LoadTextureImage("../../data/tc-earth_daymap_surface.jpg");      // TextureImage0
     LoadTextureImage("../../data/tc-earth_nightmap_citylights.gif"); // TextureImage1
+    LoadTextureImage("../../data/field.jpg"); // TextureImage2
+    LoadTextureImage("../../data/goalpost.png"); // TextureImage3
+    LoadTextureImage("../../data/sky.png"); // TextureImage4
+    LoadTextureImage("../../data/crowd.png"); // TextureImage5
 
     // Construímos a representação de objetos geométricos através de malhas de triângulos
     ObjModel spheremodel("../../data/sphere.obj");
@@ -336,16 +358,23 @@ int main(int argc, char* argv[])
     glm::vec4 matriz_camera;
 
     // Definindo os planos de limite do mapa do jogo
-    objectMap["topPlane"] =    {"topPlane",    glm::vec3(INFINITY, 60.0f, 0.0f)};
-    objectMap["bottomPlane"] = {"bottomPlane", glm::vec3(INFINITY, -1.0f, 0.0f), };
-    objectMap["rightPlane"] =  {"rightPlane",  glm::vec3(0.0f, INFINITY, 60.0f) };
-    objectMap["leftPlane"] =   {"leftPlane",   glm::vec3(0.0f, INFINITY, -60.0f) };
-    objectMap["frontPlane"] =  {"frontPlane",  glm::vec3(30.0f, INFINITY, 0.0f) };
-    objectMap["backPlane"] =   {"backPlane",   glm::vec3(-30.0f, INFINITY, 0.0f) };
+    planeMap["topPlane"] =       {"topPlane",       glm::vec3(INFINITY, 54.0f, 0.0f)};
+    planeMap["bottomPlane"] =    {"bottomPlane",    glm::vec3(INFINITY, -1.0f, 0.0f), };
+    planeMap["rightPlane"] =     {"rightPlane",     glm::vec3(0.0f, INFINITY, 58.0f) };
+    planeMap["leftPlane"] =      {"leftPlane",      glm::vec3(0.0f, INFINITY, -58.0f) };
+    planeMap["frontPlane"] =     {"frontPlane",     glm::vec3(30.0f, INFINITY, 0.0f) };
+    planeMap["backPlane"] =      {"backPlane",      glm::vec3(-30.0f, INFINITY, 0.0f) };
+    planeMap["touchdownPlane"] = {"touchdownPlane", glm::vec3(-27.0f, 0.0, -45.0f) };
 
-    objectMap["player"] = {"player", glm::vec3(5.0f, 5.0f, 0.0f) };
+    objectMap["player"] = {"player", glm::vec3(0.0f, 6.0f, 53.0f) };
 
-    glm::vec4 next_view_pos = glm::vec4(5.0f,5.0f,0.0f,1.0f);
+    // * 8
+    objectMap["defender"] = {"defender", glm::vec3(5.0f,5.0f,20.0f) };
+
+    glm::vec4 next_view_pos = glm::vec4(0.0f,6.0f,53.0f,1.0f);
+
+    // bool growing_defender = true;
+    float growth_multiplier = 0.0f;
 
     // Ficamos em loop, renderizando, até que o usuário feche a janela
     while (!glfwWindowShouldClose(window))
@@ -392,44 +421,44 @@ int main(int argc, char* argv[])
         {
             camera_position_c = next_view_pos;
         }
-
-        if( !key_pressed )
+        else if( !key_pressed )
         {
-            camera_position_c = glm::vec4(x,y,z,1.0f);
+            camera_position_c = glm::vec4(0.0f,6.0f,53.0f,1.0f);
         }
 
         // frente é definido como uma soma â câmera
         if (kb_w_pressed)
         {
-            camera_position_c.x += 0.01 * free_camera.x;
-            camera_position_c.y += 0.01 * free_camera.y;
-            camera_position_c.z += 0.01 * free_camera.z;
+            camera_position_c.x += 0.05 * free_camera.x;
+            //camera_position_c.y += 0.05 * free_camera.y;
+            camera_position_c.z += 0.05 * free_camera.z;
             key_pressed = true;
         }
         // trás é definido como uma subtração â câmera
         if (kb_s_pressed)
         {
-            camera_position_c.x -= 0.01 * free_camera.x;
-            camera_position_c.y -= 0.01 * free_camera.y;
-            camera_position_c.z -= 0.01 * free_camera.z;
+            camera_position_c.x -= 0.05 * free_camera.x;
+            //camera_position_c.y -= 0.05 * free_camera.y;
+            camera_position_c.z -= 0.05 * free_camera.z;
             key_pressed = true;
         }
         // esquerda é definido como uma rotação e soma â câmera
         if (kb_a_pressed)
         {
             matriz_camera = Matrix_Rotate_Y(1.5708) * free_camera;
-            camera_position_c.x += 0.01 * matriz_camera.x;
-            camera_position_c.z += 0.01 * matriz_camera.z;
+            camera_position_c.x += 0.05 * matriz_camera.x;
+            camera_position_c.z += 0.05 * matriz_camera.z;
             key_pressed = true;
         }
         // direita é definido como uma rotação e soma â câmera
         if (kb_d_pressed)
         {
             matriz_camera = Matrix_Rotate_Y(1.5708) * free_camera;
-            camera_position_c.x -= 0.01 * matriz_camera.x;
-            camera_position_c.z -= 0.01 * matriz_camera.z;
+            camera_position_c.x -= 0.05 * matriz_camera.x;
+            camera_position_c.z -= 0.05 * matriz_camera.z;
             key_pressed = true;
         }
+        // reseta pra posição de início
         if (kb_p_pressed)
         {
             camera_position_c = glm::vec4(x,y,z,1.0f);
@@ -438,7 +467,8 @@ int main(int argc, char* argv[])
         glm::vec4 camera_up_vector = glm::vec4(0.0f,1.0f,0.0f,0.0f);
         camera_view_vector = free_camera;
 
-        AmbientObject playerObj = {"player", glm::vec3(camera_position_c.x, camera_position_c.y, camera_position_c.z) };
+        AmbientObject playerObj = {"player", glm::vec3(camera_position_c.x, camera_position_c.y, camera_position_c.z),
+                                             glm::vec3(camera_position_c.x, camera_position_c.y, camera_position_c.z) };
         objectMap["player"] = playerObj;
 
         // Computamos a matriz "View" utilizando os parâmetros da câmera para
@@ -482,86 +512,209 @@ int main(int argc, char* argv[])
         glUniformMatrix4fv(view_uniform       , 1 , GL_FALSE , glm::value_ptr(view));
         glUniformMatrix4fv(projection_uniform , 1 , GL_FALSE , glm::value_ptr(projection));
 
-        #define SPHERE 0
-        #define BUNNY  1
-        #define DEFENDER  2
-        #define WALL_TOP    3
-        #define WALL_BOTTOM 4
-        #define WALL_LEFT   5
-        #define WALL_RIGHT  6
-        #define WALL_FRONT  7
-        #define WALL_BACK   8
-
-        // Desenhamos o modelo da esfera
-        model = Matrix_Translate(1.0f,7.0f,0.0f)
-              * Matrix_Rotate_Z(0.6f)
-              * Matrix_Rotate_X(0.2f)
-              * Matrix_Rotate_Y(g_AngleY + (float)glfwGetTime() * 0.1f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, SPHERE);
-        DrawVirtualObject("sphere");
-
-        // Desenhamos o modelo do coelho
-        model = Matrix_Translate(2.0f,7.0f,0.0f)
-              * Matrix_Rotate_X(g_AngleX + (float)glfwGetTime() * 0.1f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, BUNNY);
-        DrawVirtualObject("bunny");
+        #define SPHERE         0
+        #define BUNNY          1
+        #define DEFENDER       2
+        #define WALL_TOP       3
+        #define WALL_BOTTOM    4
+        #define WALL_LEFT      5
+        #define WALL_RIGHT     6
+        #define WALL_FRONT     7
+        #define WALL_BACK      8
+        #define WALL_TOUCHDOWN 9
 
         // ############## PAREDES ##############
         model = Matrix_Translate(0.0f,-1.0f,0.0f)
-                * Matrix_Scale(100.0f, 100.0f, 100.0f);
+                * Matrix_Scale(30.0f, 60.0f, 60.0f)
+                * Matrix_Rotate_Y(1.57f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, WALL_BOTTOM);
         DrawVirtualObject("wall");
 
-        model = Matrix_Translate(0.0f,60.0f,0.0f)
-                * Matrix_Scale(100.0f, 100.0f, 100.0f)
+        model = Matrix_Translate(0.0f,54.0f,0.0f)
+                * Matrix_Scale(32.0f, 60.0f, 62.0f)
                 * Matrix_Rotate_X(-3.15);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, WALL_TOP);
         DrawVirtualObject("wall");
 
-        model = Matrix_Translate(0.0f,0.0f,-60.0f)
-                * Matrix_Scale(100.0f, 100.0f, 100.0f)
-                * Matrix_Rotate_X(1.55f);
+        model = Matrix_Translate(0.0f,25.0f,-58.0f)
+                * Matrix_Scale(32.0f, 30.0f, 30.0f)
+                * Matrix_Rotate_X(1.56f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, WALL_LEFT);
         DrawVirtualObject("wall");
 
-        model = Matrix_Translate(0.0f,0.0f,60.0f)
-                * Matrix_Scale(100.0f, 100.0f, 100.0f)
-                * Matrix_Rotate_X(-1.55f);
+        model = Matrix_Translate(0.0f,25.0f,58.0f)
+                * Matrix_Scale(32.0f, 30.0f, 30.0f)
+                * Matrix_Rotate_X(-1.57f)
+                * Matrix_Rotate_Y(3.15f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, WALL_RIGHT);
         DrawVirtualObject("wall");
 
-        model = Matrix_Translate(30.0f,0.0f,0.0f)
-                * Matrix_Scale(100.0f, 100.0f, 100.0f)
-                * Matrix_Rotate_Z(1.55f);
+        model = Matrix_Translate(30.0f,25.0f,0.0f)
+                * Matrix_Scale(32.0f, 30.0f, 60.0f)
+                * Matrix_Rotate_Z(1.57f)
+                * Matrix_Rotate_Y(-1.55f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, WALL_FRONT);
         DrawVirtualObject("wall");
 
-        model = Matrix_Translate(-30.0f,0.0f,0.0f)
-                * Matrix_Scale(100.0f, 100.0f, 100.0f)
-                * Matrix_Rotate_Z(-1.55f);
+        model = Matrix_Translate(-30.0f,25.0f,0.0f)
+                * Matrix_Scale(32.0f, 30.0f, 60.0f)
+                * Matrix_Rotate_Z(-1.57f)
+                * Matrix_Rotate_Y(1.57f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, WALL_BACK);
         DrawVirtualObject("wall");
 
+        model = Matrix_Translate(0.0f,-0.9f,-50.0f)
+                * Matrix_Scale(27.0f, 1.0f, 5.0f);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(object_id_uniform, WALL_TOUCHDOWN);
+        DrawVirtualObject("wall");
 
         // ############## DEFENSORES ##############
-        model = Matrix_Translate(5.0f,5.0f,20.0f)
-                * Matrix_Scale(0.5f, 0.5f, 0.5f)
-                * Matrix_Rotate_X(-1.55f);
-        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, DEFENDER);
-        DrawVirtualObject("defender");
+        if ( g_AngleX > 1.0f )
+            growth_multiplier = std::max(0.6f, (float)glfwGetTime() * 0.005f) + 1.0f;
+        else if ( g_AngleX <= 0.01f )
+            growth_multiplier = std::max(0.6f, (float)glfwGetTime() * 0.005f) + 0.01f;
+        else
+            growth_multiplier = std::max(0.6f, (float)glfwGetTime() * 0.005f) + g_AngleX;
+
+        t += increasing ? 0.004f : -0.004f;
+        t_fast += increasing_fast ? 0.005f : -0.005f;
+
+        if ( t >= 1 )
+        {
+            increasing = false;
+            t = 1;
+        }
+        else if ( t <= 0 )
+        {
+            increasing = true;
+            t = 0;
+        }
+
+        if ( t_fast >= 1 )
+        {
+            increasing_fast = false;
+            t_fast = 1;
+        }
+        else if ( t_fast <= 0 )
+        {
+            increasing_fast = true;
+            t_fast = 0;
+        }
+
+        // só pra poder colapsar isso tudo no vscode
+        if ( true )
+        {
+            // ## CROSS
+            glm::vec4 p00 = glm::vec4(-13.0f,0.0f,-18.0f,1.0f);
+            glm::vec4 p01 = glm::vec4(-7.0f,0.0f,-12.0f,1.0f);
+            glm::vec4 p02 = glm::vec4(13.0f,0.0f,-2.0f,1.0f);
+            glm::vec4 p03 = glm::vec4(12.0f,0.0f, 5.0f,1.0f);
+            glm::vec4 tr_position0 = bezier_pos(p00, p01, p02, p03, t);
+            model = Matrix_Translate(tr_position0.x,tr_position0.y,tr_position0.z)
+                    * Matrix_Scale(growth_multiplier, growth_multiplier, growth_multiplier)
+                    * Matrix_Rotate_X(-1.55f);
+            glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(object_id_uniform, DEFENDER);
+            DrawVirtualObject("defender");
+
+            glm::vec4 p10 = glm::vec4(25.0f,0.0f,-18.0f,1.0f);
+            glm::vec4 p11 = glm::vec4(12.0f,0.0f,-12.0f,1.0f);
+            glm::vec4 p12 = glm::vec4(-12.0f,0.0f,-2.0f,1.0f);
+            glm::vec4 p13 = glm::vec4(-23.0f,0.0f, 5.0f,1.0f);
+            glm::vec4 tr_position1 = bezier_pos(p10, p11, p12, p13, t);
+            model = Matrix_Translate(tr_position1.x,tr_position1.y,tr_position1.z)
+                    * Matrix_Scale(growth_multiplier, growth_multiplier, growth_multiplier)
+                    * Matrix_Rotate_X(-1.55f);
+            glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(object_id_uniform, DEFENDER);
+            DrawVirtualObject("defender");
+
+            // ## BACK
+            glm::vec4 p20 = glm::vec4(-24.0f,0.0f,-30.0f,1.0f);
+            glm::vec4 p21 = glm::vec4(-5.0f,0.0f,-30.0f,1.0f);
+            glm::vec4 p22 = glm::vec4(5.0f,0.0f,-30.0f,1.0f);
+            glm::vec4 p23 = glm::vec4(24.0f,0.0f,-30.0f,1.0f);
+            glm::vec4 tr_position2 = bezier_pos(p20, p21, p22, p23, t);
+            model = Matrix_Translate(tr_position2.x,tr_position2.y,tr_position2.z)
+                    * Matrix_Scale(growth_multiplier, growth_multiplier, growth_multiplier)
+                    * Matrix_Rotate_X(-1.55f);
+            glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(object_id_uniform, DEFENDER);
+            DrawVirtualObject("defender");
+
+            glm::vec4 p30 = glm::vec4(24.0f,0.0f,-38.0f,1.0f);
+            glm::vec4 p31 = glm::vec4(5.0f,0.0f,-38.0f,1.0f);
+            glm::vec4 p32 = glm::vec4(-5.0f,0.0f,-38.0f,1.0f);
+            glm::vec4 p33 = glm::vec4(-24.0f,0.0f,-38.0f,1.0f);
+            glm::vec4 tr_position3 = bezier_pos(p30, p31, p32, p33, t_fast);
+            model = Matrix_Translate(tr_position3.x,tr_position3.y,tr_position3.z)
+                    * Matrix_Scale(growth_multiplier, growth_multiplier, growth_multiplier)
+                    * Matrix_Rotate_X(-1.55f);
+            glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(object_id_uniform, DEFENDER);
+            DrawVirtualObject("defender");
+
+            // ## ARCH
+            glm::vec4 p40 = glm::vec4(0.0f,0.0f,-5.0f,1.0f);
+            glm::vec4 p41 = glm::vec4(13.0f,0.0f,-1.0f,1.0f);
+            glm::vec4 p42 = glm::vec4(21.0f,0.0f,12.0f,1.0f);
+            glm::vec4 p43 = glm::vec4(24.0f,0.0f,16.0f,1.0f);
+            glm::vec4 tr_position4 = bezier_pos(p40, p41, p42, p43, t_fast);
+            model = Matrix_Translate(tr_position4.x,tr_position4.y,tr_position4.z)
+                    * Matrix_Scale(growth_multiplier, growth_multiplier, growth_multiplier)
+                    * Matrix_Rotate_X(-1.55f);
+            glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(object_id_uniform, DEFENDER);
+            DrawVirtualObject("defender");
+
+            glm::vec4 p50 = glm::vec4(0.0f,0.0f,-5.0f,1.0f);
+            glm::vec4 p51 = glm::vec4(-13.0f,0.0f,-1.0f,1.0f);
+            glm::vec4 p52 = glm::vec4(-21.0f,0.0f,12.0f,1.0f);
+            glm::vec4 p53 = glm::vec4(-24.0f,0.0f,16.0f,1.0f);
+            glm::vec4 tr_position5 = bezier_pos(p50, p51, p52, p53, t_fast);
+            model = Matrix_Translate(tr_position5.x,tr_position5.y,tr_position5.z)
+                    * Matrix_Scale(growth_multiplier, growth_multiplier, growth_multiplier)
+                    * Matrix_Rotate_X(-1.55f);
+            glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(object_id_uniform, DEFENDER);
+            DrawVirtualObject("defender");
+
+            // ## FRONT
+            glm::vec4 p60 = glm::vec4(0.0f,0.0f,0.0f,1.0f);
+            glm::vec4 p61 = glm::vec4(22.0f,0.0f,13.0f,1.0f);
+            glm::vec4 p62 = glm::vec4(-21.0f,0.0f,-12.0f,1.0f);
+            glm::vec4 p63 = glm::vec4(0.0f,0.0f,1.0f,1.0f);
+            glm::vec4 tr_position6 = bezier_pos(p60, p61, p62, p63, t);
+            model = Matrix_Translate(tr_position6.x,tr_position6.y,tr_position6.z)
+                    * Matrix_Scale(growth_multiplier, growth_multiplier, growth_multiplier)
+                    * Matrix_Rotate_X(-1.55f);
+            glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(object_id_uniform, DEFENDER);
+            DrawVirtualObject("defender");
+
+            glm::vec4 p70 = glm::vec4(0.0f,0.0f,0.0f,1.0f);
+            glm::vec4 p71 = glm::vec4(-25.0f,0.0f,17.0f,1.0f);
+            glm::vec4 p72 = glm::vec4(19.0f,0.0f,-23.0f,1.0f);
+            glm::vec4 p73 = glm::vec4(0.0f,0.0f,1.0f,1.0f);
+            glm::vec4 tr_position7 = bezier_pos(p70, p71, p72, p73, t_fast);
+            model = Matrix_Translate(tr_position7.x,tr_position7.y,tr_position7.z)
+                    * Matrix_Scale(growth_multiplier, growth_multiplier, growth_multiplier)
+                    * Matrix_Rotate_X(-1.55f);
+            glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+            glUniform1i(object_id_uniform, DEFENDER);
+            DrawVirtualObject("defender");
+        }
 
         float pad = TextRendering_LineHeight(window);
         char buffer[80];
-        snprintf(buffer, 80, "Z(%.2f)*Y(%.2f)*X(%.2f)\n", (objectMap.at("player").bbox.x), (objectMap.at("player").bbox.y), (objectMap.at("player").bbox.z));
+        snprintf(buffer, 80, "Z(%.2f)*Y(%.2f)*X(%.2f)\n", (objectMap.at("player").bbox_min.z), (objectMap.at("player").bbox_min.y), (objectMap.at("player").bbox_min.x));
         TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+2*pad/2, 1.0f);
 
         bool collided = false;
@@ -569,43 +722,37 @@ int main(int argc, char* argv[])
         // retorna uma lista pra poder atualizar o player de fato fora do loop
         std::list<std::string> collidedObjects;
 
+        for ( auto obj : planeMap ) {
+            if ( isCollidingWithPlane(objectMap.at("player"), obj.second))
+            {
+                collided = true;
+                char buffer[80];
+                snprintf(buffer, 80, "Colliding with %s\n", obj.first.c_str());
+                TextRendering_PrintString(window, buffer, -1.0f+pad, -1.0f+2*pad, 1.0f);
+
+                collidedObjects.push_back(obj.first);
+            }
+        }
+
         for ( auto obj : objectMap ) {
             if ( obj.first != "player" )
             {
-                if ( isCollidingWithPlane(objectMap.at("player"), obj.second))
+                if ( objectsColliding(objectMap.at("player"), obj.second) )
                 {
-                    collided = true;
-                    char buffer[80];
-                    snprintf(buffer, 80, "Colliding with %s\n", obj.first.c_str());
-                    TextRendering_PrintString(window, buffer, -1.0f+pad, -1.0f+2*pad, 1.0f);
-
-                    if ( obj.first == "topPlane" )
+                    if ( obj.first == "defender" )
                     {
-                        collidedObjects.push_back("topPlane");
-                    }
-                    else if ( obj.first == "bottomPlane" )
-                    {
-                        collidedObjects.push_back("bottomPlane");
-                    }
-                    else if ( obj.first == "leftPlane" )
-                    {
-                        collidedObjects.push_back("leftPlane");
-                    }
-                    else if ( obj.first == "rightPlane" )
-                    {
-                        collidedObjects.push_back("rightPlane");
-                    }
-                    else if ( obj.first == "frontPlane" )
-                    {
-                        collidedObjects.push_back("frontPlane");
-                    }
-                    else if ( obj.first == "backPlane" )
-                    {
-                        collidedObjects.push_back("backPlane");
+                        float pad = TextRendering_LineHeight(window);
+                        char buffer[80];
+                        snprintf(buffer, 80, "Colliding with obj %s\n", obj.first.c_str());
+                        TextRendering_PrintString(window, buffer, -1.0f+pad, -1.0f+pad, 1.0f);
                     }
                 }
             }
         }
+
+        AmbientObject defenderObj = {"defender", g_VirtualScene["defender"].bbox_min * growth_multiplier,
+                                                 g_VirtualScene["defender"].bbox_max * growth_multiplier };
+        objectMap["defender"] = defenderObj;
 
         // corrige a posição se colidiu com um plano
         if ( collided )
@@ -614,51 +761,77 @@ int main(int argc, char* argv[])
             {
                 if ( plane == "topPlane" )
                 {
-                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x,
-                                                     objectMap.at("player").bbox.y - 1.0f,
-                                                     objectMap.at("player").bbox.z) };
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox_min.x,
+                                                     objectMap.at("player").bbox_min.y - 1.0f,
+                                                     objectMap.at("player").bbox_min.z),
+                                           glm::vec3(objectMap.at("player").bbox_max.x,
+                                                     objectMap.at("player").bbox_max.y - 1.0f,
+                                                     objectMap.at("player").bbox_max.z) };
                 }
                 else if ( plane == "bottomPlane" )
                 {
-                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x,
-                                                     objectMap.at("player").bbox.y + 1.0f,
-                                                     objectMap.at("player").bbox.z) };
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox_min.x,
+                                                     objectMap.at("player").bbox_min.y + 1.0f,
+                                                     objectMap.at("player").bbox_min.z),
+                                           glm::vec3(objectMap.at("player").bbox_min.x,
+                                                     objectMap.at("player").bbox_min.y + 1.0f,
+                                                     objectMap.at("player").bbox_min.z) };
                 }
                 else if ( plane == "leftPlane" )
                 {
-                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x,
-                                                     objectMap.at("player").bbox.y,
-                                                     objectMap.at("player").bbox.z + 1.0f) };
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox_min.x,
+                                                     objectMap.at("player").bbox_min.y,
+                                                     objectMap.at("player").bbox_min.z + 1.0f),
+                                           glm::vec3(objectMap.at("player").bbox_min.x,
+                                                     objectMap.at("player").bbox_min.y,
+                                                     objectMap.at("player").bbox_min.z + 1.0f) };
                 }
                 else if ( plane == "rightPlane" )
                 {
-                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x,
-                                                     objectMap.at("player").bbox.y,
-                                                     objectMap.at("player").bbox.z - 1.0f) };
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox_min.x,
+                                                     objectMap.at("player").bbox_min.y,
+                                                     objectMap.at("player").bbox_min.z - 1.0f),
+                                           glm::vec3(objectMap.at("player").bbox_min.x,
+                                                     objectMap.at("player").bbox_min.y,
+                                                     objectMap.at("player").bbox_min.z - 1.0f) };
                 }
                 else if ( plane == "frontPlane" )
                 {
-                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x - 1.0f,
-                                                     objectMap.at("player").bbox.y,
-                                                     objectMap.at("player").bbox.z) };
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox_min.x - 1.0f,
+                                                     objectMap.at("player").bbox_min.y,
+                                                     objectMap.at("player").bbox_min.z),
+                                           glm::vec3(objectMap.at("player").bbox_min.x - 1.0f,
+                                                     objectMap.at("player").bbox_min.y,
+                                                     objectMap.at("player").bbox_min.z) };
                 }
                 else if ( plane == "backPlane" )
                 {
-                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x + 1.0f,
-                                                     objectMap.at("player").bbox.y,
-                                                     objectMap.at("player").bbox.z) };
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox_min.x + 1.0f,
+                                                     objectMap.at("player").bbox_min.y,
+                                                     objectMap.at("player").bbox_min.z),
+                                           glm::vec3(objectMap.at("player").bbox_min.x + 1.0f,
+                                                     objectMap.at("player").bbox_min.y,
+                                                     objectMap.at("player").bbox_min.z) };
+                }
+                // chegou no fim
+                else if ( plane == "touchdownPlane" )
+                {
+                    float pad = TextRendering_LineHeight(window);
+                    char buffer[80];
+                    snprintf(buffer, 80, "Victory!!!\n");
+                    TextRendering_PrintString(window, buffer, -1.0f+pad, -1.0f+pad, 1.0f);
                 }
             }
         }
 
         if ( collidedObjects.size() > 0 )
         {
-            next_view_pos = { playerObj.bbox.x, playerObj.bbox.y, playerObj.bbox.z, 1.0f };
+            next_view_pos = { playerObj.bbox_max.x, playerObj.bbox_max.y, playerObj.bbox_max.z, 1.0f };
             objectMap["player"] = playerObj;
         }
         else
         {
-            next_view_pos = { playerObj.bbox.x, playerObj.bbox.y, playerObj.bbox.z, 0.0f };
+            next_view_pos = { playerObj.bbox_max.x, playerObj.bbox_max.y, playerObj.bbox_max.z, 0.0f };
         }
         collidedObjects.clear();
 
@@ -701,6 +874,17 @@ int main(int argc, char* argv[])
 
     // Fim do programa
     return 0;
+}
+
+// dado 4 pontos de controle e um parâmetro t, retorna o ponto final
+// FONTE: inspirado em https://www.youtube.com/watch?v=aVwxzDHniEw
+glm::vec4 bezier_pos(glm::vec4 p0, glm::vec4 p1, glm::vec4 p2, glm::vec4 p3, float t){
+    float first = (1-t) * (1-t) * (1-t);
+    float second = 3 * t * (1-t) * (1-t);
+    float third = 3 * t * t * (1-t);
+    float fourth = t * t * t;
+
+    return first * p0 + second * p1 + third * p2 + fourth * p3;
 }
 
 // Função que carrega uma imagem para ser utilizada como textura
@@ -836,6 +1020,9 @@ void LoadShadersFromFiles()
     glUniform1i(glGetUniformLocation(program_id, "TextureImage0"), 0);
     glUniform1i(glGetUniformLocation(program_id, "TextureImage1"), 1);
     glUniform1i(glGetUniformLocation(program_id, "TextureImage2"), 2);
+    glUniform1i(glGetUniformLocation(program_id, "TextureImage3"), 3);
+    glUniform1i(glGetUniformLocation(program_id, "TextureImage4"), 4);
+    glUniform1i(glGetUniformLocation(program_id, "TextureImage5"), 5);
     glUseProgram(0);
 }
 
@@ -1406,9 +1593,24 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 
     float delta = 3.141592 / 16; // 22.5 graus, em radianos.
 
+    float delta2 = 0.01f;
+    if (key == GLFW_KEY_J && action == GLFW_PRESS)
+    {
+        g_AngleX2 += (mod & GLFW_MOD_SHIFT) ? -delta2 : delta2;
+    }
+    if (key == GLFW_KEY_K && action == GLFW_PRESS)
+    {
+        g_AngleY2 += (mod & GLFW_MOD_SHIFT) ? -delta2 : delta2;
+    }
+    if (key == GLFW_KEY_L && action == GLFW_PRESS)
+    {
+        g_AngleZ2 += (mod & GLFW_MOD_SHIFT) ? -delta2 : delta2;
+    }
+
+
     if (key == GLFW_KEY_X && action == GLFW_PRESS)
     {
-        g_AngleX += (mod & GLFW_MOD_SHIFT) ? -delta : delta;
+        g_AngleX += (mod & GLFW_MOD_SHIFT) ? -delta2 : delta2;
     }
 
     if (key == GLFW_KEY_Y && action == GLFW_PRESS)
@@ -1426,6 +1628,9 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         g_AngleX = 0.0f;
         g_AngleY = 0.0f;
         g_AngleZ = 0.0f;
+        g_AngleX2 = 0.0f;
+        g_AngleY2 = 0.0f;
+        g_AngleZ2 = 0.0f;
         g_ForearmAngleX = 0.0f;
         g_ForearmAngleZ = 0.0f;
         g_TorsoPositionX = 0.0f;
