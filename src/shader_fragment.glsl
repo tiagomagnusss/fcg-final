@@ -21,7 +21,11 @@ uniform mat4 projection;
 // Identificador que define qual objeto está sendo desenhado no momento
 #define SPHERE 0
 #define BUNNY  1
-#define PLANE  2
+#define DEFENDER  2
+#define WALL_TOP    3
+#define WALL_BOTTOM 4
+#define WALL_LEFT   5
+#define WALL_RIGHT  6
 uniform int object_id;
 
 // Parâmetros da axis-aligned bounding box (AABB) do modelo
@@ -120,11 +124,27 @@ void main()
         //U = 0.0;
         //V = 0.0;
     }
-    else if ( object_id == PLANE )
+    else if ( object_id == DEFENDER )
     {
         // Coordenadas de textura do plano, obtidas do arquivo OBJ.
         U = texcoords.x;
         V = texcoords.y;
+    }
+    else if ( object_id >= 3 )
+    {
+        float minx = bbox_min.x;
+        float maxx = bbox_max.x;
+
+        float miny = bbox_min.y;
+        float maxy = bbox_max.y;
+
+        float minz = bbox_min.z;
+        float maxz = bbox_max.z;
+
+        U = (position_model.x - minx)/(maxx-minx);
+        V = (position_model.y - miny)/(maxy-miny);
+        //U = texcoords.x;
+        //V = texcoords.y;
     }
 
     // Obtemos a refletância difusa a partir da leitura da imagem TextureImage0
@@ -134,9 +154,41 @@ void main()
     // Equação de Iluminação
     float lambert = max(0,dot(n,l));
 
-    color = Kd1 * (1 - pow(lambert, 0.2)) + Kd0 * (lambert + 0.01);
+    if ( object_id == 2 )
+    {
+        color = vec3(0.30, 0.01, 0.12) * (1 - pow(lambert, 0.1)) + vec3(0.30, 0.01, 0.12) * (lambert + 0.01);
+    }
+    else if ( object_id == 3 )
+    {
+        color = vec3(0.28, 0.31, 0.22);
+    }
+    else if ( object_id == 4 )
+    {
+        color = vec3(0.58, 0.31, 0.37);
+    }
+    else if ( object_id == 5 )
+    {
+        color = vec3(0.24, 0.78, 0.55);
+    }
+    else if ( object_id == 6 )
+    {
+        color = vec3(0.33, 0.48, 0.67);
+    }
+    else if ( object_id == 7 )
+    {
+        color = vec3(0.88, 0.34, 0.12);
+    }
+    else if ( object_id == 8 )
+    {
+        color = vec3(0.51, 0.78, 0.37);
+    }
+    else
+    {
+        color = Kd1 * (1 - pow(lambert, 0.2)) + Kd0 * (lambert + 0.01);
+    }
 
     // Cor final com correção gamma, considerando monitor sRGB.
     // Veja https://en.wikipedia.org/w/index.php?title=Gamma_correction&oldid=751281772#Windows.2C_Mac.2C_sRGB_and_TV.2Fvideo_standard_gammas
+
     color = pow(color, vec3(1.0,1.0,1.0)/2.2);
 }

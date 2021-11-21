@@ -40,6 +40,7 @@
 // Headers locais, definidos na pasta "include/"
 #include "utils.h"
 #include "matrices.h"
+#include "collisions.h"
 
 // Estrutura que representa um modelo geométrico carregado a partir de um
 // arquivo ".obj". Veja https://en.wikipedia.org/wiki/Wavefront_.obj_file .
@@ -127,6 +128,9 @@ struct SceneObject
     glm::vec3    bbox_max;
 };
 
+// AmbientObjects em collisions
+
+
 // Abaixo definimos variáveis globais utilizadas em várias funções do código.
 
 // A cena virtual é uma lista de objetos nomeados, guardados em um dicionário
@@ -137,6 +141,9 @@ std::map<std::string, SceneObject> g_VirtualScene;
 
 // Pilha que guardará as matrizes de modelagem.
 std::stack<glm::mat4>  g_MatrixStack;
+
+// Lista de objetos que existirão na cena
+std::map<std::string, AmbientObject> objectMap;
 
 // Razão de proporção da janela (largura/altura). Veja função FramebufferSizeCallback().
 float g_ScreenRatio = 1.0f;
@@ -180,6 +187,7 @@ bool kb_w_pressed = false;
 bool kb_a_pressed = false;
 bool kb_s_pressed = false;
 bool kb_d_pressed = false;
+bool kb_p_pressed = false;
 
 // Variáveis que definem um programa de GPU (shaders). Veja função LoadShadersFromFiles().
 GLuint vertex_shader_id;
@@ -291,6 +299,14 @@ int main(int argc, char* argv[])
     ComputeNormals(&planemodel);
     BuildTrianglesAndAddToVirtualScene(&planemodel);
 
+    ObjModel wallmodel("../../data/wall.obj");
+    ComputeNormals(&wallmodel);
+    BuildTrianglesAndAddToVirtualScene(&wallmodel);
+
+    ObjModel defendermodel("../../data/defender.obj");
+    ComputeNormals(&defendermodel);
+    BuildTrianglesAndAddToVirtualScene(&defendermodel);
+
     if ( argc > 1 )
     {
         ObjModel model(argv[1]);
@@ -318,6 +334,18 @@ int main(int argc, char* argv[])
     glm::vec4 camera_position_c ;
     glm::vec4 camera_view_vector;
     glm::vec4 matriz_camera;
+
+    // Definindo os planos de limite do mapa do jogo
+    objectMap["topPlane"] =    {"topPlane",    glm::vec3(INFINITY, 60.0f, 0.0f)};
+    objectMap["bottomPlane"] = {"bottomPlane", glm::vec3(INFINITY, -1.0f, 0.0f), };
+    objectMap["rightPlane"] =  {"rightPlane",  glm::vec3(0.0f, INFINITY, 60.0f) };
+    objectMap["leftPlane"] =   {"leftPlane",   glm::vec3(0.0f, INFINITY, -60.0f) };
+    objectMap["frontPlane"] =  {"frontPlane",  glm::vec3(30.0f, INFINITY, 0.0f) };
+    objectMap["backPlane"] =   {"backPlane",   glm::vec3(-30.0f, INFINITY, 0.0f) };
+
+    objectMap["player"] = {"player", glm::vec3(5.0f, 5.0f, 0.0f) };
+
+    glm::vec4 next_view_pos = glm::vec4(5.0f,5.0f,0.0f,1.0f);
 
     // Ficamos em loop, renderizando, até que o usuário feche a janela
     while (!glfwWindowShouldClose(window))
@@ -359,47 +387,59 @@ int main(int argc, char* argv[])
 */
         // Cria o objeto da câmera
         glm::vec4 free_camera = glm::vec4(-x,-y,-z,0.0f);
+
+        if ( next_view_pos.w != 0.0f)
+        {
+            camera_position_c = next_view_pos;
+        }
+
         if( !key_pressed )
         {
-            camera_position_c  = glm::vec4(x,y,z,1.0f); //
+            camera_position_c = glm::vec4(x,y,z,1.0f);
         }
 
         // frente é definido como uma soma â câmera
         if (kb_w_pressed)
         {
-            camera_position_c.x += 0.001 * free_camera.x;
-            camera_position_c.y += 0.001 * free_camera.y;
-            camera_position_c.z += 0.001 * free_camera.z;
+            camera_position_c.x += 0.01 * free_camera.x;
+            camera_position_c.y += 0.01 * free_camera.y;
+            camera_position_c.z += 0.01 * free_camera.z;
             key_pressed = true;
         }
         // trás é definido como uma subtração â câmera
         if (kb_s_pressed)
         {
-            camera_position_c.x -= 0.001 * free_camera.x;
-            camera_position_c.y -= 0.001 * free_camera.y;
-            camera_position_c.z -= 0.001 * free_camera.z;
+            camera_position_c.x -= 0.01 * free_camera.x;
+            camera_position_c.y -= 0.01 * free_camera.y;
+            camera_position_c.z -= 0.01 * free_camera.z;
             key_pressed = true;
         }
         // esquerda é definido como uma rotação e soma â câmera
         if (kb_a_pressed)
         {
             matriz_camera = Matrix_Rotate_Y(1.5708) * free_camera;
-            camera_position_c.x += 0.001 * matriz_camera.x;
-            camera_position_c.z += 0.001 * matriz_camera.z;
+            camera_position_c.x += 0.01 * matriz_camera.x;
+            camera_position_c.z += 0.01 * matriz_camera.z;
             key_pressed = true;
         }
         // direita é definido como uma rotação e soma â câmera
         if (kb_d_pressed)
         {
             matriz_camera = Matrix_Rotate_Y(1.5708) * free_camera;
-            camera_position_c.x -= 0.001 * matriz_camera.x;
-            camera_position_c.z -= 0.001 * matriz_camera.z;
+            camera_position_c.x -= 0.01 * matriz_camera.x;
+            camera_position_c.z -= 0.01 * matriz_camera.z;
             key_pressed = true;
+        }
+        if (kb_p_pressed)
+        {
+            camera_position_c = glm::vec4(x,y,z,1.0f);
         }
 
         glm::vec4 camera_up_vector = glm::vec4(0.0f,1.0f,0.0f,0.0f);
         camera_view_vector = free_camera;
 
+        AmbientObject playerObj = {"player", glm::vec3(camera_position_c.x, camera_position_c.y, camera_position_c.z) };
+        objectMap["player"] = playerObj;
 
         // Computamos a matriz "View" utilizando os parâmetros da câmera para
         // definir o sistema de coordenadas da câmera.  Veja slides 2-14, 184-190 e 236-242 do documento Aula_08_Sistemas_de_Coordenadas.pdf.
@@ -411,7 +451,7 @@ int main(int argc, char* argv[])
         // Note que, no sistema de coordenadas da câmera, os planos near e far
         // estão no sentido negativo! Veja slides 176-204 do documento Aula_09_Projecoes.pdf.
         float nearplane = -0.1f;  // Posição do "near plane"
-        float farplane  = -10.0f; // Posição do "far plane"
+        float farplane  = -200.0f; // Posição do "far plane"
 
         if (g_UsePerspectiveProjection)
         {
@@ -444,10 +484,16 @@ int main(int argc, char* argv[])
 
         #define SPHERE 0
         #define BUNNY  1
-        #define PLANE  2
+        #define DEFENDER  2
+        #define WALL_TOP    3
+        #define WALL_BOTTOM 4
+        #define WALL_LEFT   5
+        #define WALL_RIGHT  6
+        #define WALL_FRONT  7
+        #define WALL_BACK   8
 
         // Desenhamos o modelo da esfera
-        model = Matrix_Translate(-1.0f,0.0f,0.0f)
+        model = Matrix_Translate(1.0f,7.0f,0.0f)
               * Matrix_Rotate_Z(0.6f)
               * Matrix_Rotate_X(0.2f)
               * Matrix_Rotate_Y(g_AngleY + (float)glfwGetTime() * 0.1f);
@@ -456,17 +502,166 @@ int main(int argc, char* argv[])
         DrawVirtualObject("sphere");
 
         // Desenhamos o modelo do coelho
-        model = Matrix_Translate(1.0f,0.0f,0.0f)
+        model = Matrix_Translate(2.0f,7.0f,0.0f)
               * Matrix_Rotate_X(g_AngleX + (float)glfwGetTime() * 0.1f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
         glUniform1i(object_id_uniform, BUNNY);
         DrawVirtualObject("bunny");
 
-        // Desenhamos o plano do chão
-        model = Matrix_Translate(0.0f,-1.1f,0.0f);
+        // ############## PAREDES ##############
+        model = Matrix_Translate(0.0f,-1.0f,0.0f)
+                * Matrix_Scale(100.0f, 100.0f, 100.0f);
         glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
-        glUniform1i(object_id_uniform, PLANE);
-        DrawVirtualObject("plane");
+        glUniform1i(object_id_uniform, WALL_BOTTOM);
+        DrawVirtualObject("wall");
+
+        model = Matrix_Translate(0.0f,60.0f,0.0f)
+                * Matrix_Scale(100.0f, 100.0f, 100.0f)
+                * Matrix_Rotate_X(-3.15);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(object_id_uniform, WALL_TOP);
+        DrawVirtualObject("wall");
+
+        model = Matrix_Translate(0.0f,0.0f,-60.0f)
+                * Matrix_Scale(100.0f, 100.0f, 100.0f)
+                * Matrix_Rotate_X(1.55f);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(object_id_uniform, WALL_LEFT);
+        DrawVirtualObject("wall");
+
+        model = Matrix_Translate(0.0f,0.0f,60.0f)
+                * Matrix_Scale(100.0f, 100.0f, 100.0f)
+                * Matrix_Rotate_X(-1.55f);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(object_id_uniform, WALL_RIGHT);
+        DrawVirtualObject("wall");
+
+        model = Matrix_Translate(30.0f,0.0f,0.0f)
+                * Matrix_Scale(100.0f, 100.0f, 100.0f)
+                * Matrix_Rotate_Z(1.55f);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(object_id_uniform, WALL_FRONT);
+        DrawVirtualObject("wall");
+
+        model = Matrix_Translate(-30.0f,0.0f,0.0f)
+                * Matrix_Scale(100.0f, 100.0f, 100.0f)
+                * Matrix_Rotate_Z(-1.55f);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(object_id_uniform, WALL_BACK);
+        DrawVirtualObject("wall");
+
+
+        // ############## DEFENSORES ##############
+        model = Matrix_Translate(5.0f,5.0f,20.0f)
+                * Matrix_Scale(0.5f, 0.5f, 0.5f)
+                * Matrix_Rotate_X(-1.55f);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(object_id_uniform, DEFENDER);
+        DrawVirtualObject("defender");
+
+        float pad = TextRendering_LineHeight(window);
+        char buffer[80];
+        snprintf(buffer, 80, "Z(%.2f)*Y(%.2f)*X(%.2f)\n", (objectMap.at("player").bbox.x), (objectMap.at("player").bbox.y), (objectMap.at("player").bbox.z));
+        TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+2*pad/2, 1.0f);
+
+        bool collided = false;
+        // verifica colisões do player
+        // retorna uma lista pra poder atualizar o player de fato fora do loop
+        std::list<std::string> collidedObjects;
+
+        for ( auto obj : objectMap ) {
+            if ( obj.first != "player" )
+            {
+                if ( isCollidingWithPlane(objectMap.at("player"), obj.second))
+                {
+                    collided = true;
+                    char buffer[80];
+                    snprintf(buffer, 80, "Colliding with %s\n", obj.first.c_str());
+                    TextRendering_PrintString(window, buffer, -1.0f+pad, -1.0f+2*pad, 1.0f);
+
+                    if ( obj.first == "topPlane" )
+                    {
+                        collidedObjects.push_back("topPlane");
+                    }
+                    else if ( obj.first == "bottomPlane" )
+                    {
+                        collidedObjects.push_back("bottomPlane");
+                    }
+                    else if ( obj.first == "leftPlane" )
+                    {
+                        collidedObjects.push_back("leftPlane");
+                    }
+                    else if ( obj.first == "rightPlane" )
+                    {
+                        collidedObjects.push_back("rightPlane");
+                    }
+                    else if ( obj.first == "frontPlane" )
+                    {
+                        collidedObjects.push_back("frontPlane");
+                    }
+                    else if ( obj.first == "backPlane" )
+                    {
+                        collidedObjects.push_back("backPlane");
+                    }
+                }
+            }
+        }
+
+        // corrige a posição se colidiu com um plano
+        if ( collided )
+        {
+            for ( std::string plane : collidedObjects )
+            {
+                if ( plane == "topPlane" )
+                {
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x,
+                                                     objectMap.at("player").bbox.y - 1.0f,
+                                                     objectMap.at("player").bbox.z) };
+                }
+                else if ( plane == "bottomPlane" )
+                {
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x,
+                                                     objectMap.at("player").bbox.y + 1.0f,
+                                                     objectMap.at("player").bbox.z) };
+                }
+                else if ( plane == "leftPlane" )
+                {
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x,
+                                                     objectMap.at("player").bbox.y,
+                                                     objectMap.at("player").bbox.z + 1.0f) };
+                }
+                else if ( plane == "rightPlane" )
+                {
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x,
+                                                     objectMap.at("player").bbox.y,
+                                                     objectMap.at("player").bbox.z - 1.0f) };
+                }
+                else if ( plane == "frontPlane" )
+                {
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x - 1.0f,
+                                                     objectMap.at("player").bbox.y,
+                                                     objectMap.at("player").bbox.z) };
+                }
+                else if ( plane == "backPlane" )
+                {
+                    playerObj = {"player", glm::vec3(objectMap.at("player").bbox.x + 1.0f,
+                                                     objectMap.at("player").bbox.y,
+                                                     objectMap.at("player").bbox.z) };
+                }
+            }
+        }
+
+        if ( collidedObjects.size() > 0 )
+        {
+            next_view_pos = { playerObj.bbox.x, playerObj.bbox.y, playerObj.bbox.z, 1.0f };
+            objectMap["player"] = playerObj;
+        }
+        else
+        {
+            next_view_pos = { playerObj.bbox.x, playerObj.bbox.y, playerObj.bbox.z, 0.0f };
+        }
+        collidedObjects.clear();
+
 
         // Pegamos um vértice com coordenadas de modelo (0.5, 0.5, 0.5, 1) e o
         // passamos por todos os sistemas de coordenadas armazenados nas
@@ -1116,8 +1311,8 @@ void CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
         float dy = ypos - g_LastCursorPosY;
 
         // Atualizamos parâmetros da câmera com os deslocamentos
-        g_CameraTheta -= 0.005f*dx;
-        g_CameraPhi   += 0.005f*dy;
+        g_CameraTheta -= 0.01f*dx;
+        g_CameraPhi   += 0.01f*dy;
 
         // Em coordenadas esféricas, o ângulo phi deve ficar entre -pi/2 e +pi/2.
         float phimax = 3.141592f/2;
@@ -1240,13 +1435,13 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
     // Se o usuário apertar a tecla P, utilizamos projeção perspectiva.
     if (key == GLFW_KEY_P && action == GLFW_PRESS)
     {
-        g_UsePerspectiveProjection = true;
+        //g_UsePerspectiveProjection = true;
     }
 
     // Se o usuário apertar a tecla O, utilizamos projeção ortográfica.
     if (key == GLFW_KEY_O && action == GLFW_PRESS)
     {
-        g_UsePerspectiveProjection = false;
+        //g_UsePerspectiveProjection = false;
     }
 
     // Se o usuário apertar a tecla H, fazemos um "toggle" do texto informativo mostrado na tela.
@@ -1283,7 +1478,12 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
 
         if (key == GLFW_KEY_D)
         {
-            kb_d_pressed =true;
+            kb_d_pressed = true;
+        }
+
+        if (key == GLFW_KEY_P)
+        {
+            kb_p_pressed = true;
         }
     }
 
@@ -1307,6 +1507,11 @@ void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mod)
         if (key == GLFW_KEY_D)
         {
             kb_d_pressed = false;
+        }
+
+        if (key == GLFW_KEY_P)
+        {
+            kb_p_pressed = false;
         }
     }
 }
