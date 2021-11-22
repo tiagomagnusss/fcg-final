@@ -307,6 +307,7 @@ int main(int argc, char* argv[])
     LoadTextureImage("../../data/goalpost.png"); // TextureImage3
     LoadTextureImage("../../data/sky.png"); // TextureImage4
     LoadTextureImage("../../data/crowd.png"); // TextureImage5
+    LoadTextureImage("../../data/football.jpg"); // TextureImage6
 
     // Construímos a representação de objetos geométricos através de malhas de triângulos
     ObjModel spheremodel("../../data/sphere.obj");
@@ -328,6 +329,10 @@ int main(int argc, char* argv[])
     ObjModel defendermodel("../../data/defender.obj");
     ComputeNormals(&defendermodel);
     BuildTrianglesAndAddToVirtualScene(&defendermodel);
+
+    ObjModel footballmodel("../../data/football.obj");
+    ComputeNormals(&footballmodel);
+    BuildTrianglesAndAddToVirtualScene(&footballmodel);
 
     if ( argc > 1 )
     {
@@ -522,6 +527,7 @@ int main(int argc, char* argv[])
         #define WALL_FRONT     7
         #define WALL_BACK      8
         #define WALL_TOUCHDOWN 9
+        #define FOOTBALL      10
 
         // ############## PAREDES ##############
         model = Matrix_Translate(0.0f,-1.0f,0.0f)
@@ -711,6 +717,19 @@ int main(int argc, char* argv[])
             glUniform1i(object_id_uniform, DEFENDER);
             DrawVirtualObject("defender");
         }
+
+        // Desenhando uma bola de futebol americano como HUD
+        model = glm::inverse(view)
+                    * Matrix_Translate(0.6f, -0.7f, -1.5f)
+                    * Matrix_Scale(0.04f, 0.04f, 0.04f)
+                    * Matrix_Rotate_X(2.50)
+                    * Matrix_Rotate_Y(-3.04)
+                    * Matrix_Rotate_Z(0.22);
+        glUniformMatrix4fv(model_uniform, 1 , GL_FALSE , glm::value_ptr(model));
+        glUniform1i(object_id_uniform, FOOTBALL);
+        glDisable(GL_DEPTH_TEST);
+        DrawVirtualObject("football");
+        glEnable(GL_DEPTH_TEST);
 
         float pad = TextRendering_LineHeight(window);
         char buffer[80];
@@ -1016,6 +1035,7 @@ void LoadShadersFromFiles()
     bbox_max_uniform        = glGetUniformLocation(program_id, "bbox_max");
 
     // Variáveis em "shader_fragment.glsl" para acesso das imagens de textura
+    // NEW_IMAGE
     glUseProgram(program_id);
     glUniform1i(glGetUniformLocation(program_id, "TextureImage0"), 0);
     glUniform1i(glGetUniformLocation(program_id, "TextureImage1"), 1);
@@ -1023,6 +1043,7 @@ void LoadShadersFromFiles()
     glUniform1i(glGetUniformLocation(program_id, "TextureImage3"), 3);
     glUniform1i(glGetUniformLocation(program_id, "TextureImage4"), 4);
     glUniform1i(glGetUniformLocation(program_id, "TextureImage5"), 5);
+    glUniform1i(glGetUniformLocation(program_id, "TextureImage6"), 6);
     glUseProgram(0);
 }
 

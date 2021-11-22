@@ -29,6 +29,7 @@ uniform mat4 projection;
 #define WALL_FRONT     7
 #define WALL_BACK      8
 #define WALL_TOUCHDOWN 9
+#define FOOTBALL           10
 uniform int object_id;
 
 // Parâmetros da axis-aligned bounding box (AABB) do modelo
@@ -42,6 +43,7 @@ uniform sampler2D TextureImage2;
 uniform sampler2D TextureImage3;
 uniform sampler2D TextureImage4;
 uniform sampler2D TextureImage5;
+uniform sampler2D TextureImage6;
 
 // O valor de saída ("out") de um Fragment Shader é a cor final do fragmento.
 out vec3 color;
@@ -149,6 +151,7 @@ void main()
     vec3 Kd3 = texture(TextureImage3, vec2(U,V)).rgb;
     vec3 Kd4 = texture(TextureImage4, vec2(U,V)).rgb;
     vec3 Kd5 = texture(TextureImage5, vec2(U,V)).rgb;
+    vec3 Kd6 = texture(TextureImage6, vec2(U,V)).rgb;
 
     // Equação de Iluminação
     float lambert = max(0,dot(n,l));
@@ -183,6 +186,10 @@ void main()
     else if ( object_id == 9 )
     {
         color = vec3(0.831, 0.686, 0.215);
+    }
+    else if ( object_id == 10 )
+    {
+        color = Kd6 * (1 - pow(lambert, 0.2)) + Kd6 * (lambert + 0.01);
     }
     else
     {
