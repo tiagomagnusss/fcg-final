@@ -766,8 +766,8 @@ int main(int argc, char* argv[])
 
             float pad = TextRendering_LineHeight(window);
             char buffer[80];
-            snprintf(buffer, 80, "Z(%.2f)*Y(%.2f)*X(%.2f)\n", (objectMap.at("player").bbox_min.z), (objectMap.at("player").bbox_min.y), (objectMap.at("player").bbox_min.x));
-            TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+2*pad/2, 1.0f);
+            //snprintf(buffer, 80, "Z(%.2f)*Y(%.2f)*X(%.2f)\n", (objectMap.at("player").bbox_min.z), (objectMap.at("player").bbox_min.y), (objectMap.at("player").bbox_min.x));
+            //TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+2*pad/2, 1.0f);
 
             bool collided = false;
             // verifica colisões do player
@@ -779,8 +779,8 @@ int main(int argc, char* argv[])
                 {
                     collided = true;
                     char buffer[80];
-                    snprintf(buffer, 80, "Colliding with %s\n", obj.first.c_str());
-                    TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+2*pad, 1.0f);
+                    //snprintf(buffer, 80, "Colliding with %s\n", obj.first.c_str());
+                    //TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+2*pad, 1.0f);
 
                     collidedObjects.push_back(obj.first);
                 }
@@ -795,8 +795,8 @@ int main(int argc, char* argv[])
                         {
                             float pad = TextRendering_LineHeight(window);
                             char buffer[80];
-                            snprintf(buffer, 80, "Colliding with obj %s\n", obj.first.c_str());
-                            TextRendering_PrintString(window, buffer, -1.0f+pad, -1.0f+pad, 1.0f);
+                            //snprintf(buffer, 80, "Colliding with obj %s\n", obj.first.c_str());
+                            //TextRendering_PrintString(window, buffer, -1.0f+pad, -1.0f+pad, 1.0f);
                         }
                     }
                 }
@@ -870,8 +870,8 @@ int main(int argc, char* argv[])
                     {
                         float pad = TextRendering_LineHeight(window);
                         char buffer[80];
-                        snprintf(buffer, 80, "Victory!!!\n");
-                        TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+pad*3, 1.0f);
+                        //snprintf(buffer, 80, "Victory!!!\n");
+                        //TextRendering_PrintString(window, buffer, -1.0f+pad/2, -1.0f+pad*3, 1.0f);
                         game_won = true;
                     }
                 }
