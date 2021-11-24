@@ -29,7 +29,9 @@ uniform mat4 projection;
 #define WALL_FRONT     7
 #define WALL_BACK      8
 #define WALL_TOUCHDOWN 9
-#define FOOTBALL           10
+#define FOOTBALL       10
+#define WALL_WIN       11
+
 uniform int object_id;
 
 // Parâmetros da axis-aligned bounding box (AABB) do modelo
@@ -44,6 +46,7 @@ uniform sampler2D TextureImage3;
 uniform sampler2D TextureImage4;
 uniform sampler2D TextureImage5;
 uniform sampler2D TextureImage6;
+uniform sampler2D TextureImage7;
 
 // O valor de saída ("out") de um Fragment Shader é a cor final do fragmento.
 out vec3 color;
@@ -129,17 +132,10 @@ void main()
 
         U = (position_model.x - minx)/(maxx-minx);
         V = (position_model.y - miny)/(maxy-miny);
-        //U = 0.0;
-        //V = 0.0;
     }
-    else if ( object_id == DEFENDER )
+    else if ( object_id >= 2 )
     {
         // Coordenadas de textura do plano, obtidas do arquivo OBJ.
-        U = texcoords.x;
-        V = texcoords.y;
-    }
-    else if ( object_id >= 3 )
-    {
         U = texcoords.x;
         V = texcoords.y;
     }
@@ -152,6 +148,7 @@ void main()
     vec3 Kd4 = texture(TextureImage4, vec2(U,V)).rgb;
     vec3 Kd5 = texture(TextureImage5, vec2(U,V)).rgb;
     vec3 Kd6 = texture(TextureImage6, vec2(U,V)).rgb;
+    vec3 Kd7 = texture(TextureImage7, vec2(U,V)).rgb;
 
     // Equação de Iluminação
     float lambert = max(0,dot(n,l));
@@ -190,6 +187,10 @@ void main()
     else if ( object_id == 10 )
     {
         color = Kd6 * (1 - pow(lambert, 0.2)) + Kd6 * (lambert + 0.01);
+    }
+    else if ( object_id == 11 )
+    {
+        color = Kd7 * (1 - pow(lambert, 0.2)) + Kd7 * (lambert + 0.01);
     }
     else
     {
